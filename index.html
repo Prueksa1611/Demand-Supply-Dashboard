@@ -22,25 +22,41 @@ th:first-child,td:first-child,.l{text-align:left}td.l,th.l{text-align:left}
 .cal .h{min-height:0;background:#eef1f5;font-weight:600;text-align:center}.cal .d{color:var(--mut)}
 .chip{display:block;margin-top:2px;padding:1px 4px;border-radius:3px;background:#ccfbf1;color:#134e4a}.chip.p{background:#fde68a;color:#78350f}
 .note{color:var(--mut);font-size:12px;margin-top:6px}.row{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:900px){.row{grid-template-columns:1fr}}
+
+:root{--ink:#e8eaf8;--mut:#8f96bb;--line:#2a2f5c;--bg:#0d1024;--pan:#171a36;--bad:#ff8a9b}
+body{background:radial-gradient(1100px 560px at 8% -8%,#2b2470 0,transparent 60%),var(--bg);color:var(--ink)}
+header{background:transparent;display:grid;grid-template-columns:1fr auto;align-items:end;max-width:1500px;margin:auto;padding:26px 28px 6px}
+.upd{grid-column:2;grid-row:1/3;margin:0;color:#9fe9dd;background:var(--pan);border:1px solid var(--line);padding:7px 16px;border-radius:999px}
+.sub{color:var(--mut)}.filters{background:rgba(13,16,36,.92);border-bottom:1px solid var(--line)}
+select{background:var(--pan);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+h2{border:0;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#a5adff;margin:30px 0 12px}h3{font-size:15px}
+.kpis{background:transparent;border:0;gap:14px}
+.k{display:flex;flex-direction:column;border:0;border-radius:16px;padding:16px 18px;color:#fff;background:linear-gradient(135deg,#a855f7,#6366f1)}
+.k:nth-child(4n+2){background:linear-gradient(135deg,#2dd4bf,#3b82f6)}.k:nth-child(4n+3){background:linear-gradient(135deg,#f472b6,#a855f7)}.k:nth-child(4n){background:linear-gradient(135deg,#f59e0b,#ef4444)}
+.k span{order:-1;color:rgba(255,255,255,.88)}.k b{font-size:30px}.k b.neg{color:#fff}
+.panel{background:var(--pan);border:1px solid var(--line);border-radius:18px;padding:18px}
+th{background:#20244a;color:#cfd4ff}th,td{border-bottom:1px solid var(--line)}.neg{color:var(--bad)}
+.cal{border-color:var(--line)}.cal>div{background:#13162e;border-color:var(--line)}.cal .h{background:#20244a}
+.chip{background:rgba(45,212,191,.18);color:#7ff0e0}.chip.p{background:rgba(245,165,36,.2);color:#fcd34d}
 </style></head><body>
 <header><h1>Demand &amp; Supply Dashboard</h1><div class="sub">Stock position · Confirmed Order · Incoming vehicle schedule</div><div class="upd" id="upd"></div></header>
 <main>
 <div class="filters"><label>Origin <select id="fo"><option>All</option><option>CKD</option><option>CBU</option></select></label>
 <label>Model <select id="fm"></select></label></div>
 
-<h2>Section 1: STOCK Position</h2>
+<h2>STOCK Position</h2>
 <div class="kpis" id="k1"></div>
-<div class="panel"><h3>STOCK POSITION REPORT: Total stock, Active booking and Remaining stock by model</h3><div id="w1"><canvas id="c1"></canvas></div></div>
-<div class="panel"><h3>Shortage Stock report (Remaining stock &lt; 0)</h3>
-<label>Color <select id="fc"></select></label><span class="note"> Colors are hidden until you choose one.</span>
+<div class="panel"><h3>STOCK POSITION REPORT</h3><div id="w1"><canvas id="c1"></canvas></div></div>
+<div class="panel"><h3>Shortage Stock report</h3>
+<label>Color <select id="fc"></select></label>
 <div class="tw" id="t1"></div></div>
 
-<h2>Section 2: SUPPLY Position</h2>
+<h2>SUPPLY Position</h2>
 <div class="kpis" id="k2"></div>
-<div class="panel"><h3>Supply receiving progress (models with pending receiving &gt; 0)</h3><div id="w2"><canvas id="c2"></canvas></div></div>
-<div class="row"><div class="panel"><h3>Incoming vehicle schedule: November by model by day</h3><canvas id="c3"></canvas></div>
-<div class="panel"><h3>Estimated arrival: December by model by day</h3><canvas id="c4"></canvas></div></div>
-<p class="note">Daily charts and the calendar show the plan (CBU = ETA date, CKD = production date). KPI Incoming Nov / ETA Dec follow the Excel logic.</p>
+<div class="panel"><h3>Supply receiving progress</h3><div id="w2"><canvas id="c2"></canvas></div></div>
+<div class="row"><div class="panel"><h3>Incoming vehicle schedule</h3><canvas id="c3"></canvas></div>
+<div class="panel"><h3>Estimated Arrival of December</h3><canvas id="c4"></canvas></div></div>
+
 <div class="panel"><h3>Model-level demand &amp; supply</h3><div class="tw" id="t2"></div></div>
 <div class="panel"><h3>CBU-Import shipment plan and CKD production plan</h3><label>Month <select id="fa"></select></label><div id="cal" style="margin-top:8px"></div></div>
 <div class="panel"><h3>Upcoming shipments (ETA from today)</h3><div class="tw" id="t3"></div></div>
@@ -50,8 +66,8 @@ th:first-child,td:first-child,.l{text-align:left}td.l,th.l{text-align:left}
 const $=id=>document.getElementById(id),n=v=>Math.round(v).toLocaleString('en-US');
 const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const today=iso(new Date()),eom=s=>{const[y,m]=s.split('-');return iso(new Date(+y,+m,0))},eomM5=s=>{const[y,m]=s.split('-');return iso(new Date(+y,+m,-5))};
-let D,R,CF,ch={};
-const ld=u=>fetch(u).then(r=>{if(!r.ok)throw 0;return r.json()});
+let D,R,CF,ch={};Chart.defaults.color='#aab0d0';Chart.defaults.borderColor='#2a2f5c';
+const ld=u=>fetch(u+'?v='+Date.now()).then(r=>{if(!r.ok)throw 0;return r.json()});
 ld('data/data.json').catch(()=>ld('data.json')).then(d=>{D=d;init()}).catch(()=>{$('upd').textContent='Data file not found. Upload data.json inside a folder named data in the repository.'});
 
 // ---- logic copied from the Excel "Calculated" sheet (TODAY() = viewer's date) ----
@@ -84,14 +100,14 @@ function grp(a){const g={};a.forEach(r=>{const k=r.o+'|'+r.m,x=g[k]=g[k]||{o:r.o
 const kp=a=>a.map(([l,v,c])=>`<div class="k"><b class="${c||''}">${n(v)}</b><span>${l}</span></div>`).join('');
 const tbl=(h,rows)=>`<table><tr>${h.map((x,i)=>`<th class="${i<(h.l||1)?'l':''}">${x}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((x,i)=>`<td class="${typeof x=='string'?'l':''}${x<0?' neg':''}">${typeof x=='number'?n(x):x}</td>`).join('')}</tr>`).join('')}</table>`;
 const mk=(id,cfg)=>{ch[id]&&ch[id].destroy();ch[id]=new Chart($(id),cfg)};
-const hue=i=>`hsl(${(i*47)%360} 55% 48%)`;
+const hue=i=>`hsl(${(i*47)%360} 70% 62%)`;
 function render(){
  const f=sel(),a=R.filter(r=>ok(r,f)),g=grp(a).sort((x,y)=>x.H-y.H),cf=CF.filter(r=>ok(r,f));
  $('k1').innerHTML=kp([['REVER STOCK ON HAND',sum(a,'rev')],['DEALERs STOCK',sum(a,'dl')],['ACTIVE BOOKING',sum(a,'bk')]]);
  $('k2').innerHTML=kp([['CONFIRMED ORDER 2026 (P01-P12)',sum(a,'cf')],['PLACED PO',sum(a,'po')],['Pending to place PO',sum(a,'cf')-sum(a,'po')],['PENDING RECEIVING (from PO issued)',sum(a,'O')],['INCOMING Nov.',sum(a,'Q')],['ETA of Dec.',sum(a,'X')],['PENDING TAX PAYMENT',cf.reduce((s,r)=>s+r.P,0)],['Remaining BYD Stock 2026',sum(a,'W')]]);
  // Graph: stock position
  $('w1').style.height=(60+g.length*34)+'px';
- mk('c1',{type:'bar',data:{labels:g.map(x=>x.m),datasets:[{label:'Total stock',data:g.map(x=>x.F),backgroundColor:'#14213d'},{label:'Active booking',data:g.map(x=>x.bk),backgroundColor:'#d97706'},{label:'Remaining stock',data:g.map(x=>x.H),backgroundColor:g.map(x=>x.H<0?'#b42318':'#0f766e')}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{position:'top'}}}});
+ mk('c1',{type:'bar',data:{labels:g.map(x=>x.m),datasets:[{label:'Total stock',data:g.map(x=>x.F),backgroundColor:'#6d7cff'},{label:'Active booking',data:g.map(x=>x.bk),backgroundColor:'#f5a524'},{label:'Remaining stock',data:g.map(x=>x.H),backgroundColor:g.map(x=>x.H<0?'#ff5d7a':'#2dd4bf')}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{position:'top'}}}});
  // Shortage table
  const c=$('fc').value,H=['Model'].concat(c?['Color']:[],['REVER Stock','Dealer Stock','Active Booking','Remaining Stock','Incoming Nov.','ETA Dec.','Production Plan Nov.','Production Plan Dec.']);H.l=c?2:1;
  const sr=(c?a.filter(r=>c=='All colors'||r.c==c):g).filter(r=>r.H<0).sort((x,y)=>x.H-y.H);
@@ -100,7 +116,7 @@ function render(){
  const p=g.filter(x=>x.O>0).sort((x,y)=>y.O-x.O),tot=x=>x.O+x.Q+x.X;
  $('w2').style.height=(70+p.length*30)+'px';
  const ds=(l,k,col)=>({label:l,raw:p.map(x=>x[k]),data:p.map(x=>tot(x)?x[k]/tot(x)*100:0),backgroundColor:col});
- mk('c2',{type:'bar',data:{labels:p.map(x=>x.m),datasets:[ds('Pending receiving','O','#14213d'),ds('Incoming Nov.','Q','#0f766e'),ds('ETA Dec.','X','#d97706')]},options:{indexAxis:'y',maintainAspectRatio:false,scales:{x:{stacked:true,max:100,ticks:{callback:v=>v+'%'}},y:{stacked:true}},plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+n(c.dataset.raw[c.dataIndex])+' units'}}}}});
+ mk('c2',{type:'bar',data:{labels:p.map(x=>x.m),datasets:[ds('Pending receiving','O','#6d7cff'),ds('Incoming Nov.','Q','#2dd4bf'),ds('ETA Dec.','X','#c084fc')]},options:{indexAxis:'y',maintainAspectRatio:false,scales:{x:{stacked:true,max:100,ticks:{callback:v=>v+'%'}},y:{stacked:true}},plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+n(c.dataset.raw[c.dataIndex])+' units'}}}}});
  // Daily charts
  const sp=D.ss.filter(r=>r[3]&&r[2]!='BYD Stock'&&ok({o:r[0],m:r[5]},f));
  [['c3',D.q3.slice(0,7)],['c4',D.r3.slice(0,7)]].forEach(([id,ym])=>{const rs=sp.filter(r=>r[3].startsWith(ym)),days=[...new Set(rs.map(r=>r[3]))].sort(),mm=[...new Set(rs.map(r=>r[5]))];
