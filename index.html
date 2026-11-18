@@ -51,7 +51,8 @@ const $=id=>document.getElementById(id),n=v=>Math.round(v).toLocaleString('en-US
 const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const today=iso(new Date()),eom=s=>{const[y,m]=s.split('-');return iso(new Date(+y,+m,0))},eomM5=s=>{const[y,m]=s.split('-');return iso(new Date(+y,+m,-5))};
 let D,R,CF,ch={};
-fetch('data/data.json').then(r=>r.json()).then(d=>{D=d;init()});
+const ld=u=>fetch(u).then(r=>{if(!r.ok)throw 0;return r.json()});
+ld('data/data.json').catch(()=>ld('data.json')).then(d=>{D=d;init()}).catch(()=>{$('upd').textContent='Data file not found. Upload data.json inside a folder named data in the repository.'});
 
 // ---- logic copied from the Excel "Calculated" sheet (TODAY() = viewer's date) ----
 const ss=(o,k,t,a,b)=>D.ss.reduce((s,r)=>s+(r[0]==o&&r[1]==k&&r[2]==t&&(a==null||(r[3]&&r[3]>=a&&r[3]<=b))?r[4]:0),0);
