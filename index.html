@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Demand &amp; Supply Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--ink:#14213d;--mut:#5b6678;--line:#d9dee7;--bg:#f6f7f9;--acc:#0f766e;--bad:#b42318;--warn:#b45309}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI","Noto Sans Thai",Arial,sans-serif}
+header{background:var(--ink);color:#fff;padding:22px 28px}h1{margin:0;font-size:28px;letter-spacing:-.3px}
+.sub{opacity:.85;margin-top:2px}.upd{margin-top:8px;font-weight:600;color:#7fe0d4}
+main{padding:0 28px 40px;max-width:1500px;margin:auto}
+.filters{display:flex;gap:18px;padding:14px 0;position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid var(--line)}
+select{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:4px;background:#fff}
+h2{font-size:20px;margin:30px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--ink)}h3{font-size:15px;margin:0 0 8px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));border:1px solid var(--line);background:#fff;margin-bottom:16px}
+.k{padding:12px 14px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}.k b{display:block;font-size:26px}.k span{color:var(--mut);font-size:12px}
+.neg{color:var(--bad)}.panel{background:#fff;border:1px solid var(--line);padding:14px;margin-bottom:16px}
+.tw{overflow:auto;max-height:420px}table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th{position:sticky;top:0;background:#eef1f5;text-align:right}
+th:first-child,td:first-child,.l{text-align:left}td.l,th.l{text-align:left}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);border-left:1px solid var(--line);border-top:1px solid var(--line)}
+.cal>div{border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-height:84px;padding:3px;font-size:11px;background:#fff}
+.cal .h{min-height:0;background:#eef1f5;font-weight:600;text-align:center}.cal .d{color:var(--mut)}
+.chip{display:block;margin-top:2px;padding:1px 4px;border-radius:3px;background:#ccfbf1;color:#134e4a}.chip.p{background:#fde68a;color:#78350f}
+.note{color:var(--mut);font-size:12px;margin-top:6px}.row{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:900px){.row{grid-template-columns:1fr}}
+</style></head><body>
+<header><h1>Demand &amp; Supply Dashboard</h1><div class="sub">Stock position · Confirmed Order · Incoming vehicle schedule</div><div class="upd" id="upd"></div></header>
+<main>
+<div class="filters"><label>Origin <select id="fo"><option>All</option><option>CKD</option><option>CBU</option></select></label>
+<label>Model <select id="fm"></select></label></div>
+
+<h2>Section 1: STOCK Position</h2>
+<div class="kpis" id="k1"></div>
+<div class="panel"><h3>STOCK POSITION REPORT: Total stock, Active booking and Remaining stock by model</h3><div id="w1"><canvas id="c1"></canvas></div></div>
+<div class="panel"><h3>Shortage Stock report (Remaining stock &lt; 0)</h3>
+<label>Color <select id="fc"></select></label><span class="note"> Colors are hidden until you choose one.</span>
+<div class="tw" id="t1"></div></div>
+
+<h2>Section 2: SUPPLY Position</h2>
+<div class="kpis" id="k2"></div>
+<div class="panel"><h3>Supply receiving progress (models with pending receiving &gt; 0)</h3><div id="w2"><canvas id="c2"></canvas></div></div>
+<div class="row"><div class="panel"><h3>Incoming vehicle schedule: November by model by day</h3><canvas id="c3"></canvas></div>
+<div class="panel"><h3>Estimated arrival: December by model by day</h3><canvas id="c4"></canvas></div></div>
+<p class="note">Daily charts and the calendar show the plan (CBU = ETA date, CKD = production date). KPI Incoming Nov / ETA Dec follow the Excel logic.</p>
+<div class="panel"><h3>Model-level demand &amp; supply</h3><div class="tw" id="t2"></div></div>
+<div class="panel"><h3>CBU-Import shipment plan and CKD production plan</h3><label>Month <select id="fa"></select></label><div id="cal" style="margin-top:8px"></div></div>
+<div class="panel"><h3>Upcoming shipments (ETA from today)</h3><div class="tw" id="t3"></div></div>
+<p class="note" id="foot"></p>
+</main>
+<script>
+const $=id=>document.getElementById(id),n=v=>Math.round(v).toLocaleString('en-US');
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const today=iso(new Date()),eom=s=>{const[y,m]=s.split('-');return iso(new Date(+y,+m,0))},eomM5=s=>{const[y,m]=s.split('-');return iso(new Date(+y,+m,-5))};
+let D,R,CF,ch={};
+fetch('data/data.json').then(r=>r.json()).then(d=>{D=d;init()});
+
+// ---- logic copied from the Excel "Calculated" sheet (TODAY() = viewer's date) ----
+const ss=(o,k,t,a,b)=>D.ss.reduce((s,r)=>s+(r[0]==o&&r[1]==k&&r[2]==t&&(a==null||(r[3]&&r[3]>=a&&r[3]<=b))?r[4]:0),0);
+const rv=(k,p,yr)=>{let s=0;for(const r of(D.maxEta>=today?D.ship:D.vin)){if(r[0]!=k||(p&&r[1]!=p)||(yr&&r[2]!=yr)||!r[3]||r[3]>today)continue;s+=r[r.length-1]}return s};
+const tx=(k,p)=>D.vin.reduce((s,r)=>s+(r[0]==k&&r[1]==p&&r[4]&&r[4]<=today?r[5]:0),0);
+function init(){
+ const e1=eom(D.q3),e2=eom(D.r3),m5=eomM5(D.q3);
+ R=D.calc.map(([o,m,c,rev,dl,bk,cf,po])=>{const k=(m+'|'+c).toLowerCase(),F=rev+dl,N=rv(k,null,'Y2026'),O=po-N;let Q,X,S=0,T=0,U=0,W=0;
+  if(o=='CBU'){Q=ss(o,k,'CBU-Shipment plan',today,e1);X=ss(o,k,'CBU-Shipment plan',D.r3,e2)}
+  else{S=ss(o,k,'BYD Stock');T=ss(o,k,'Production Plan',D.q3,e1);U=ss(o,k,'Production Plan',D.r3,e2);const V=S+T+U;W=Math.max(V-O,0);
+   Q=today>m5?0:(S>=O?O:Math.min(S+T,O));
+   X=today<m5?(O-Q>0?((V-O)>(O-Q)?O-Q:0):0):(S>=O?O:Math.min(S+V,O))}
+  return{o,m,c,rev,dl,F,bk,H:F-bk,cf,po,N,O,Q,X,S,T,U,W}});
+ CF=D.conf.map(([o,m,c,p,k])=>({o,m,P:rv(k,p,null)-tx(k,p)}));
+ const ms=[...new Set(R.map(r=>r.m))],cs=[...new Set(R.map(r=>r.c))].sort();
+ $('fm').innerHTML='<option>All</option>'+ms.map(m=>`<option>${m}</option>`).join('');
+ $('fc').innerHTML='<option value="">Hide colors (model level)</option><option>All colors</option>'+cs.map(c=>`<option>${c}</option>`).join('');
+ const mons=[...new Set(D.ss.filter(r=>r[3]).map(r=>r[3].slice(0,7)))].sort();
+ $('fa').innerHTML=mons.map(m=>`<option>${m}</option>`).join('');$('fa').value=today.slice(0,7);if(!$('fa').value)$('fa').value=mons[0];
+ ['fo','fm','fc','fa'].forEach(i=>$(i).onchange=render);
+ $('upd').textContent='Data update as of '+new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})+'.';
+ const m=D.meta;$('foot').textContent=`Source dates: Rever stock ${m.rever}, Dealer stock ${m.dealer}, Booking ${m.booking}, PO ${m.po}, BYD stock & shipment plan ${m.byd}. Latest ETA in shipment data: ${D.maxEta}.`;
+ render()}
+
+// ---- rendering ----
+const sel=()=>({o:$('fo').value,m:$('fm').value}),ok=(r,f)=>(f.o=='All'||r.o==f.o)&&(f.m=='All'||r.m==f.m);
+const sum=(a,k)=>a.reduce((s,r)=>s+r[k],0);
+function grp(a){const g={};a.forEach(r=>{const k=r.o+'|'+r.m,x=g[k]=g[k]||{o:r.o,m:r.m,rev:0,dl:0,F:0,bk:0,H:0,cf:0,po:0,O:0,Q:0,X:0,S:0,T:0,U:0,W:0};for(const f in x)if(f!='o'&&f!='m')x[f]+=r[f]});return Object.values(g)}
+const kp=a=>a.map(([l,v,c])=>`<div class="k"><b class="${c||''}">${n(v)}</b><span>${l}</span></div>`).join('');
+const tbl=(h,rows)=>`<table><tr>${h.map((x,i)=>`<th class="${i<(h.l||1)?'l':''}">${x}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((x,i)=>`<td class="${typeof x=='string'?'l':''}${x<0?' neg':''}">${typeof x=='number'?n(x):x}</td>`).join('')}</tr>`).join('')}</table>`;
+const mk=(id,cfg)=>{ch[id]&&ch[id].destroy();ch[id]=new Chart($(id),cfg)};
+const hue=i=>`hsl(${(i*47)%360} 55% 48%)`;
+function render(){
+ const f=sel(),a=R.filter(r=>ok(r,f)),g=grp(a).sort((x,y)=>x.H-y.H),cf=CF.filter(r=>ok(r,f));
+ $('k1').innerHTML=kp([['REVER STOCK ON HAND',sum(a,'rev')],['DEALERs STOCK',sum(a,'dl')],['ACTIVE BOOKING',sum(a,'bk')]]);
+ $('k2').innerHTML=kp([['CONFIRMED ORDER 2026 (P01-P12)',sum(a,'cf')],['PLACED PO',sum(a,'po')],['Pending to place PO',sum(a,'cf')-sum(a,'po')],['PENDING RECEIVING (from PO issued)',sum(a,'O')],['INCOMING Nov.',sum(a,'Q')],['ETA of Dec.',sum(a,'X')],['PENDING TAX PAYMENT',cf.reduce((s,r)=>s+r.P,0)],['Remaining BYD Stock 2026',sum(a,'W')]]);
+ // Graph: stock position
+ $('w1').style.height=(60+g.length*34)+'px';
+ mk('c1',{type:'bar',data:{labels:g.map(x=>x.m),datasets:[{label:'Total stock',data:g.map(x=>x.F),backgroundColor:'#14213d'},{label:'Active booking',data:g.map(x=>x.bk),backgroundColor:'#d97706'},{label:'Remaining stock',data:g.map(x=>x.H),backgroundColor:g.map(x=>x.H<0?'#b42318':'#0f766e')}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{position:'top'}}}});
+ // Shortage table
+ const c=$('fc').value,H=['Model'].concat(c?['Color']:[],['REVER Stock','Dealer Stock','Active Booking','Remaining Stock','Incoming Nov.','ETA Dec.','Production Plan Nov.','Production Plan Dec.']);H.l=c?2:1;
+ const sr=(c?a.filter(r=>c=='All colors'||r.c==c):g).filter(r=>r.H<0).sort((x,y)=>x.H-y.H);
+ $('t1').innerHTML=sr.length?tbl(H,sr.map(r=>[r.m].concat(c?[r.c]:[],[r.rev,r.dl,r.bk,r.H,r.Q,r.X,r.T,r.U]))):'No shortage for this selection.';
+ // 100% stacked: receiving progress
+ const p=g.filter(x=>x.O>0).sort((x,y)=>y.O-x.O),tot=x=>x.O+x.Q+x.X;
+ $('w2').style.height=(70+p.length*30)+'px';
+ const ds=(l,k,col)=>({label:l,raw:p.map(x=>x[k]),data:p.map(x=>tot(x)?x[k]/tot(x)*100:0),backgroundColor:col});
+ mk('c2',{type:'bar',data:{labels:p.map(x=>x.m),datasets:[ds('Pending receiving','O','#14213d'),ds('Incoming Nov.','Q','#0f766e'),ds('ETA Dec.','X','#d97706')]},options:{indexAxis:'y',maintainAspectRatio:false,scales:{x:{stacked:true,max:100,ticks:{callback:v=>v+'%'}},y:{stacked:true}},plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+n(c.dataset.raw[c.dataIndex])+' units'}}}}});
+ // Daily charts
+ const sp=D.ss.filter(r=>r[3]&&r[2]!='BYD Stock'&&ok({o:r[0],m:r[5]},f));
+ [['c3',D.q3.slice(0,7)],['c4',D.r3.slice(0,7)]].forEach(([id,ym])=>{const rs=sp.filter(r=>r[3].startsWith(ym)),days=[...new Set(rs.map(r=>r[3]))].sort(),mm=[...new Set(rs.map(r=>r[5]))];
+  mk(id,{type:'bar',data:{labels:days.map(d=>d.slice(8)+'/'+d.slice(5,7)),datasets:mm.map((m,i)=>({label:m,backgroundColor:hue(i),data:days.map(d=>rs.filter(r=>r[3]==d&&r[5]==m).reduce((s,r)=>s+r[4],0))}))},options:{scales:{x:{stacked:true},y:{stacked:true}},plugins:{legend:{labels:{boxWidth:10,font:{size:10}}}}}})});
+ // Model-level table
+ $('t2').innerHTML=tbl(['Origin','Model','Rever Stock','Dealer Stock','Active Booking','Remain Stock','BYD Stock','Placed PO','PO Pending Receiving','Incoming Nov.','ETA Dec.','Remaining BYD Stock 2026'].map(x=>x),grp(a).sort((x,y)=>x.o<y.o?1:x.o>y.o?-1:x.m<y.m?-1:1).map(r=>[r.o,r.m,r.rev,r.dl,r.bk,r.H,r.S,r.po,r.O,r.Q,r.X,r.W]));
+ document.querySelector('#t2 th:nth-child(2)').className='l';document.querySelectorAll('#t2 tr td:nth-child(2)').forEach(e=>e.className='l');
+ // Calendar
+ const ym=$('fa').value,[y,mo]=ym.split('-').map(Number),first=new Date(y,mo-1,1).getDay(),dim=new Date(y,mo,0).getDate();
+ let h=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div class="h">${d}</div>`).join('')+'<div></div>'.repeat(first);
+ for(let d=1;d<=dim;d++){const ds=ym+'-'+String(d).padStart(2,'0'),m={};
+  sp.filter(r=>r[3]==ds).forEach(r=>{const k=r[0]+'|'+r[5];m[k]=(m[k]||0)+r[4]});
+  h+=`<div><span class="d">${d}</span>${Object.entries(m).map(([k,v])=>{const[o,mod]=k.split('|');return`<span class="chip ${o=='CKD'?'p':''}">${mod} ${o=='CKD'?'Prod.':'ETA'} ${n(v)} Units</span>`}).join('')}</div>`}
+ $('cal').innerHTML='<div class="note">Green = CBU import ETA, amber = CKD production.</div><div class="cal">'+h+'</div>';
+ // Upcoming shipments
+ const up=D.up.filter(r=>r[0]>=today&&ok({o:r[1],m:r[2]},f));
+ $('t3').innerHTML=up.length?tbl(['ETA','Origin','Model','Color','Qty.','CRM PO no.','Invoice no.','Ordering Period','LC Status'],up.map(r=>[r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[8]])).replace(/<th class="">/g,'<th class="l">'):'No shipment with ETA from today in the shipment data.';
+}
+</script></body></html>
