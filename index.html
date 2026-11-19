@@ -39,7 +39,7 @@ h2{border:0;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#a5
 th{background:#20244a;color:#cfd4ff}th,td{border-bottom:1px solid var(--line)}.neg{color:var(--bad)}
 .cal{border-color:var(--line)}.cal>div{background:#13162e;border-color:var(--line)}.cal .h{background:#20244a}
 .chip{background:rgba(45,212,191,.18);color:#7ff0e0}.chip.p{background:rgba(245,165,36,.2);color:#fcd34d}
-</style></head><body>
+.desc{margin:-2px 0 10px;color:var(--mut);font-size:13px}</style></head><body>
 <header><h1>Demand &amp; Supply Dashboard</h1><div class="sub">Stock position · Confirmed Order · Incoming vehicle schedule</div><div class="upd" id="upd"></div></header>
 <main>
 <div class="filters"><label>Origin <select id="fo"><option>All</option><option>CKD</option><option>CBU</option></select></label>
@@ -55,12 +55,12 @@ th{background:#20244a;color:#cfd4ff}th,td{border-bottom:1px solid var(--line)}.n
 
 <h2>SUPPLY Position</h2>
 <div class="kpis" id="k2"></div>
-<div class="panel"><h3>Supply receiving progress</h3><div id="w2"><canvas id="c2"></canvas></div></div>
+<div class="panel"><h3>Supply receiving progress</h3><p class="desc">This shipment plan is designed to cover all issued POs that are still pending receipt. Each bar shows the share of a model arriving in November (Incoming Nov.) versus December (ETA Dec.); numbers are units.</p><div id="w2"><canvas id="c2"></canvas></div></div>
 <div class="panel"><h3>Remaining BYD Stock 2026 by Model</h3><div id="w3"><canvas id="c3"></canvas></div></div>
 <div class="panel"><h3>Estimated Arrival of December</h3><canvas id="c4"></canvas></div>
 
-<div class="panel"><h3>Model-level demand &amp; supply</h3><div class="tw" id="t2"></div></div>
 <div class="panel"><h3>CBU-Import shipment plan and CKD production plan</h3><label>Month <select id="fa"></select></label><div id="cal" style="margin-top:8px"></div></div>
+<div class="panel"><h3>Model-level demand &amp; supply</h3><div class="tw" id="t2"></div></div>
 <div class="panel"><h3>Upcoming shipments (ETA from today)</h3><div class="tw" id="t3"></div></div>
 <p class="note" id="foot"></p>
 </main>
@@ -102,35 +102,35 @@ function grp(a){const g={};a.forEach(r=>{const k=r.o+'|'+r.m,x=g[k]=g[k]||{o:r.o
 const kp=a=>a.map(([l,v,c])=>`<div class="k"><b class="${c||''}">${n(v)}</b><span>${l}</span></div>`).join('');
 const tbl=(h,rows)=>`<table><tr>${h.map((x,i)=>`<th class="${i<(h.l||1)?'l':''}">${x}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((x,i)=>`<td class="${typeof x=='string'?'l':''}${x<0?' neg':''}">${typeof x=='number'?n(x):x}</td>`).join('')}</tr>`).join('')}</table>`;
 const mk=(id,cfg)=>{ch[id]&&ch[id].destroy();ch[id]=new Chart($(id),cfg)};
-const hue=i=>`hsl(${(i*47)%360} 70% 62%)`;
+const ord=(a,b)=>a.o==b.o?0:a.o=='CBU'?-1:1;const hue=i=>`hsl(${(i*47)%360} 70% 62%)`;
 function render(){
  const f=sel(),a=R.filter(r=>ok(r,f)),g=grp(a).sort((x,y)=>x.H-y.H),cf=CF.filter(r=>ok(r,f));
  $('k1').innerHTML=kp([['REVER STOCK ON HAND',sum(a,'rev')],['DEALERs STOCK',sum(a,'dl')],['ACTIVE BOOKING',sum(a,'bk')]]);
  $('k2').innerHTML=kp([['CONFIRMED ORDER 2026 (P01-P12)',sum(a,'cf')],['PLACED PO',sum(a,'po')],['Pending to place PO',sum(a,'cf')-sum(a,'po')],['PENDING RECEIVING (from PO issued)',sum(a,'O')],['INCOMING Nov.',sum(a,'Q')],['ETA of Dec.',sum(a,'X')],['PENDING TAX PAYMENT',cf.reduce((s,r)=>s+r.P,0)],['Remaining BYD Stock 2026',sum(a,'W')]]);
  // Stock position by Model: CBU and CKD
- const lab=c=>{const x=Chart.defaults.plugins.legend.labels.generateLabels(c);x.splice(2,1,{...x[2],text:'Remaining stock (> 0)',fillStyle:'#22c55e',strokeStyle:'#22c55e'},{...x[2],text:'Remaining stock (< 0)',fillStyle:'#ff5d7a',strokeStyle:'#ff5d7a'});return x};
+ const lab=c=>{const x=Chart.defaults.plugins.legend.labels.generateLabels(c),t=document.createElement('canvas');t.width=20;t.height=10;const q=t.getContext('2d');q.fillStyle='#22c55e';q.fillRect(0,0,10,10);q.fillStyle='#ff5d7a';q.fillRect(10,0,10,10);const pt=c.ctx.createPattern(t,'repeat');x[2]={...x[2],text:'Remaining stock',fillStyle:pt,strokeStyle:pt};return x};
  const dl=o=>({color:'#e8eaf8',font:{size:11,weight:600},formatter:v=>v?n(v):'',...o});
- [['a','CBU'],['b','CKD']].forEach(([k,org])=>{const rows=g.filter(x=>x.o==org);$('p1'+k).style.display=rows.length?'':'none';if(!rows.length)return;
+ [['a','CBU'],['b','CKD']].forEach(([k,org])=>{const rows=g.filter(x=>x.o==org&&(x.F||x.bk||x.H));$('p1'+k).style.display=rows.length?'':'none';if(!rows.length)return;
   $('w1'+k).style.height=(70+rows.length*46)+'px';
   mk('c1'+k,{type:'bar',data:{labels:rows.map(x=>x.m),datasets:[{label:'REVER Stock + Dealers Stock',data:rows.map(x=>x.F),backgroundColor:'#6d7cff'},{label:'Active booking',data:rows.map(x=>x.bk),backgroundColor:'#f5a524'},{label:'Remaining stock',data:rows.map(x=>x.H),backgroundColor:rows.map(x=>x.H<0?'#ff5d7a':'#22c55e')}]},options:{indexAxis:'y',maintainAspectRatio:false,layout:{padding:{right:36}},scales:{x:{grace:'12%'}},plugins:{legend:{position:'top',labels:{generateLabels:lab}},datalabels:dl({anchor:'end',align:'end'})}}})});
  // Shortage table
- const c=$('fc').value,H=['Model'].concat(c?['Color']:[],['REVER Stock','Dealer Stock','Active Booking','Pending PO Receiving','Remaining Stock','Incoming Nov.','ETA Dec.','Production Plan Nov.','Production Plan Dec.']);H.l=c?2:1;
+ const c=$('fc').value,H=['Model'].concat(c?['Color']:[],['REVER Stock','Dealer Stock','Active Booking','Remaining Stock','Pending PO Receiving','Incoming Nov.','ETA Dec.','Production Plan Nov.','Production Plan Dec.']);H.l=c?2:1;
  const sr=(c?a.filter(r=>c=='All colors'||r.c==c):g).filter(r=>r.H<0).sort((x,y)=>x.H-y.H);
- $('t1').innerHTML=sr.length?tbl(H,sr.map(r=>[r.m].concat(c?[r.c]:[],[r.rev,r.dl,r.bk,r.O,r.H,r.Q,r.X,r.T,r.U]))):'No shortage for this selection.';
+ $('t1').innerHTML=sr.length?tbl(H,sr.map(r=>[r.m].concat(c?[r.c]:[],[r.rev,r.dl,r.bk,r.H,r.O,r.Q,r.X,r.T,r.U]))):'No shortage for this selection.';
  // 100% stacked: receiving progress
- const p=g.filter(x=>x.O>0&&x.Q+x.X>0).sort((x,y)=>(y.Q+y.X)-(x.Q+x.X)),tot=x=>x.Q+x.X;
+ const p=g.filter(x=>x.O>0&&x.Q+x.X>0).sort((x,y)=>ord(x,y)||(y.Q+y.X)-(x.Q+x.X)),tot=x=>x.Q+x.X;
  $('w2').style.height=(70+p.length*38)+'px';
  const ds=(l,k,col)=>({label:l,raw:p.map(x=>x[k]),data:p.map(x=>tot(x)?x[k]/tot(x)*100:0),backgroundColor:col});
  mk('c2',{type:'bar',data:{labels:p.map(x=>x.m),datasets:[ds('Incoming Nov.','Q','#2dd4bf'),ds('ETA Dec.','X','#c084fc')]},options:{indexAxis:'y',maintainAspectRatio:false,scales:{x:{stacked:true,max:100,ticks:{callback:v=>v+'%'}},y:{stacked:true}},plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+n(c.dataset.raw[c.dataIndex])+' units'}},datalabels:dl({color:'#0d1024',formatter:(v,c)=>{const r=c.dataset.raw[c.dataIndex];return r?n(r):''}})}}});
  // Remaining BYD Stock 2026 by Model
- const bm=g.filter(x=>x.cf>0||x.W>0).sort((x,y)=>y.cf-x.cf);$('w3').style.height=(70+bm.length*46)+'px';
- mk('c3',{type:'bar',data:{labels:bm.map(x=>x.m),datasets:[{label:'Confirmed order 2026',data:bm.map(x=>x.cf),backgroundColor:'#6d7cff'},{label:'Pending to place PO',data:bm.map(x=>x.cf-x.po),backgroundColor:'#f5a524'},{label:'Remaining BYD Stock 2026',data:bm.map(x=>x.W),backgroundColor:'#2dd4bf'}]},options:{indexAxis:'y',maintainAspectRatio:false,layout:{padding:{right:36}},plugins:{legend:{position:'top'},datalabels:dl({anchor:'end',align:'end'})}}});
+ const bm=g.filter(x=>x.cf-x.po>0||x.W>0).sort((x,y)=>ord(x,y)||(y.cf-y.po)-(x.cf-x.po));$('w3').style.height=(70+bm.length*40)+'px';
+ mk('c3',{type:'bar',data:{labels:bm.map(x=>x.m),datasets:[{label:'Pending to place PO',data:bm.map(x=>x.cf-x.po),backgroundColor:'#f5a524'},{label:'Remaining BYD Stock 2026',data:bm.map(x=>x.W),backgroundColor:'#2dd4bf'}]},options:{indexAxis:'y',maintainAspectRatio:false,layout:{padding:{right:36}},plugins:{legend:{position:'top'},datalabels:dl({anchor:'end',align:'end'})}}});
  // Daily charts
  const sp=D.ss.filter(r=>r[3]&&r[2]!='BYD Stock'&&ok({o:r[0],m:r[5]},f));
  [['c4',D.r3.slice(0,7)]].forEach(([id,ym])=>{const rs=sp.filter(r=>r[3].startsWith(ym)),days=[...new Set(rs.map(r=>r[3]))].sort(),mm=[...new Set(rs.map(r=>r[5]))];
   mk(id,{type:'bar',data:{labels:days.map(d=>d.slice(8)+'/'+d.slice(5,7)),datasets:mm.map((m,i)=>({label:m,backgroundColor:hue(i),data:days.map(d=>rs.filter(r=>r[3]==d&&r[5]==m).reduce((s,r)=>s+r[4],0))}))},options:{scales:{x:{stacked:true},y:{stacked:true}},plugins:{legend:{labels:{boxWidth:10,font:{size:10}}},datalabels:dl({color:'#0d1024',font:{size:10,weight:600}})}}})});
  // Model-level table
- $('t2').innerHTML=tbl(['Origin','Model','Rever Stock','Dealer Stock','Active Booking','Remain Stock','BYD Stock','Placed PO','PO Pending Receiving','Incoming Nov.','ETA Dec.','Remaining BYD Stock 2026'].map(x=>x),grp(a).sort((x,y)=>x.o<y.o?1:x.o>y.o?-1:x.m<y.m?-1:1).map(r=>[r.o,r.m,r.rev,r.dl,r.bk,r.H,r.S,r.po,r.O,r.Q,r.X,r.W]));
+ $('t2').innerHTML=tbl(['Origin','Model','Rever Stock','Dealer Stock','Active Booking','Remain Stock','BYD Stock','Placed PO','PO Pending Receiving','Incoming Nov.','ETA Dec.','Remaining BYD Stock 2026'].map(x=>x),grp(a).sort((x,y)=>ord(x,y)||(x.m<y.m?-1:1)).map(r=>[r.o,r.m,r.rev,r.dl,r.bk,r.H,r.S,r.po,r.O,r.Q,r.X,r.W]));
  document.querySelector('#t2 th:nth-child(2)').className='l';document.querySelectorAll('#t2 tr td:nth-child(2)').forEach(e=>e.className='l');
  // Calendar
  const ym=$('fa').value,[y,mo]=ym.split('-').map(Number),first=new Date(y,mo-1,1).getDay(),dim=new Date(y,mo,0).getDate();
