@@ -4,9 +4,11 @@ import sys, json, pandas as pd
 
 src, out = sys.argv[1], sys.argv[2]
 x = pd.ExcelFile(src)
-iso = lambda d: None if pd.isna(d) else pd.Timestamp(d).strftime('%Y-%m-%d')
+def ser(v):  # Excel stores some dates as serial numbers (e.g. 46356 = 7 Dec 2026)
+    return pd.Timestamp('1899-12-30') + pd.Timedelta(days=float(v)) if isinstance(v, (int, float)) and not pd.isna(v) else v
+iso = lambda d: None if pd.isna(ser(d)) else pd.Timestamp(ser(d)).strftime('%Y-%m-%d')
 key = lambda m, c: f"{str(m).strip()}|{'' if pd.isna(c) else str(c).strip()}".lower()
-dt = lambda s: pd.to_datetime(s, errors='coerce')
+dt = lambda s: pd.to_datetime(s.map(ser), errors='coerce')
 
 # Calculated: counts that do not depend on today (cols A,B,C,D,E,G,I,J); row 3 holds source dates
 top = x.parse('Calculated', header=None, nrows=3)
@@ -45,7 +47,7 @@ lc = [[r[0], r[1], int(r[2]), r[3], r[4], r[5] if isinstance(r[5], str) else '',
 
 # Source dates
 dlr = x.parse('DLRs Stock'); bk = x.parse('RawData Booking')
-meta = {'dealer': iso(dt(dlr['ALLOCATION DATE']).max()), 'booking': iso(dt(bk['Booking date']).max()), 'byd': iso(top.iloc[2, 18])}
+meta = {'dealer': iso(dt(dlr['ALLOCATION DATE']).max()), 'booking': iso(dt(bk['Booking date']).max()), 'byd': iso(dt(s[s['type'].eq('BYD Stock')]['eta']).min())}  # date of the BYD stock rows
 data = {'meta': meta, 'q3': iso(top.iloc[2, 16]), 'r3': iso(top.iloc[2, 17]), 'maxEta': iso(sh['eta'].max()),
         'calc': calc, 'ship': ship, 'vin': vin, 'ss': ss, 'lc': lc, 'tax': tax}
 json.dump(data, open(out, 'w'), separators=(',', ':'), default=str)
